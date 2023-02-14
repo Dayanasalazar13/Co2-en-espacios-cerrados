@@ -1,0 +1,160 @@
+---
+title: "Concentracion de co2 en espacios cerrados"
+output: html_notebook
+---
+
+Javier Tarazona 
+
+Dayana Calderon
+
+Julian Mantilla
+
+MODELAMOS A PARTIR DE DATOS ENCONTRADOS CUANTO CO2 EMITE UNA PERSONA DEPENDIENDO DE VARIABLES HUMEDAD Y TEMPERATURA. 
+
+Se modela en una regresion lineal los datos econtrados en el estudio. 
+
+ 
+```{r}
+#crear un dataframe con los datos.
+datos_emision <- data.frame(humedad = c(11.1, 10.1, 21.7, 21.7, 9.7, 18.3, 17.9),
+                    temperatura = c(32.5, 31.8, 32.6, 32.3, 29.3, 29.4, 30.9),
+                    co2 = c(30.2, 30.5, 31.1, 32.1, 28.5, 29.7, 29.7))
+
+#Se ajusta el modelo lineal
+modelo_emision <- lm(co2 ~ humedad + temperatura, data = datos_emision)
+
+#ver los resultados del modelo
+summary(modelo_emision)
+```
+
+Valores de la ecuacion.
+```{r}
+b0 <- round(coef(modelo_emision)[1], 2)
+print(b0)
+b1 <- round(coef(modelo_emision)[2], 2)
+print(b1)
+b2 <- round(coef(modelo_emision)[3], 2)
+print(b2)
+```
+
+```{r}
+library(ggplot2)
+ggplot(datos_emision, aes(x=humedad, y=co2, color=temperatura)) + 
+  geom_point() + 
+  labs(title="Relación entre humedad, temperatura y concentración de CO2", 
+       x="Humedad promedio", y="Concentración de CO2")
+```
+En Bucaramanga la temperatura promedio es de 23,5 grados y tiene una humedad del 75%, ajustamos un modelo lineal a un conjunto de datos simulados que incluyen variables de humedad y temperatura y la concentración de CO2 resultante.
+
+```{r}
+# Generar datos simulados
+#establecer una semilla 
+set.seed(123)
+#se define el número de observaciones simuladas que se van a generar.
+n <- 1000
+
+humedad <- rnorm(n, mean = 75, sd = 10) #se generan datos de humedad simulados mediante una distribución normal con media de 75 y desviación estándar de 10.
+temperatura <- rnorm(n, mean = 23.5, sd = 3) #se generan datos de temperatura simulados mediante una distribución normal con media de 23.5 y desviación estándar de 3.
+
+#se calculan los datos simulados de CO2 utilizando una ecuación lineal que incluye la humedad y la temperatura como variables predictoras. Los coeficientes de regresión utilizados para calcular los valores de CO2 son 11.57, 0.1 y 0.55, respectivamente.
+
+co2 <- 11.57 + 0.1 * humedad + 0.55 * temperatura 
+# se ajusta un modelo lineal,  que toma como entrada la variable de respuesta co2 y las variables predictoras humedad y temperatura.
+modelo_co2 <- lm(co2 ~ humedad + temperatura)
+
+# Mostrar resumen del modelo
+summary(modelo_co2)
+```
+El anterior resultado tiene medidas de gr/h lo ideal es hacer una conversion a l/m.
+```{r}
+gramos_por_hora_a_litros_por_minuto_aprox <- function(gramos_por_hora, densidad_promedio) {
+  litros_por_minuto <- (gramos_por_hora / densidad_promedio) / 60
+  return(litros_por_minuto)
+}
+
+co2_conv <- co2
+densidad_promedio <- 1.8
+
+tasa_de_flujo_litros_por_minuto <- gramos_por_hora_a_litros_por_minuto_aprox(co2_conv, densidad_promedio)
+
+```
+
+Luego de obtenidos los datos de emision de co2 de cada persona vamos a trabajar en las otras variables a tener en cuenta. 
+
+Definimos una funcion para calcular la concentracion de co2.
+
+ 1. calculamos la tasa de produccion de co2 total, esto teniendo en cuenta los     datos anteriormente convertidos.
+ 
+ 2. calculamos la tasa de ventilacion, multiplicamos la ventilacion definida     para la simulacion con el volumen de la habitacion dividido en 60, para         obtener resultados en m3/minuto.
+ 
+ 3.Calculamos la tasa de acumulacion de co2, esto con la tasa de co2 total - la     tasa de ventilacion por el co2 incial.
+ 
+ 4.Calculamos la concentracion de co2 despues de cierto tiempo, multiplicando      el co2 inicial definido mas la tasa de acumulacion de co2 por el tiempo y lo     dividimos por el volumen.
+ 
+ 5.Por ultimo retornamos el co2 final que es la concnetracion de co2 en cierto     tiempo.
+ 
+ 6. Se definen las variables y parámetros que se utilizarán en la simulación. En este caso, se define el volumen del espacio cerrado, la tasa de ventilación, el número de personas que entran y salen del espacio cerrado (simulado con una distribución de Poisson), la tasa de producción de CO2 por persona ), la concentración inicial de CO2 y el intervalo de tiempo.
+ 
+ 7. Se inicializa el vector de concentraciones de CO2. La concentración inicial se establece en la concentración inicial definida en el paso anterior.
+ 
+ 8. Se simula la concentración de CO2 en cada intervalo de tiempo utilizando la función concentracion_CO2(), que calcula la concentración de CO2 en el siguiente intervalo de tiempo en función de la concentración actual, el volumen del espacio cerrado, la tasa de ventilación, el número de personas que entran y salen del espacio cerrado, la tasa de producción de CO2 por persona y el intervalo de tiempo.
+ 
+ 9. el bucle for que recorre los elementos del vector personas desde el segundo elemento hasta el último elemento. En cada iteración, se llama la función concentracion_CO2() que toma como entrada varios parámetros.La salida de esta función se almacena en el vector concentracion, que se actualiza en cada iteración del bucle for. La salida del bucle for sería un vector concentracion que contiene las concentraciones de CO2 en el espacio a lo largo del tiempo.
+
+
+
+
+```{r}
+
+# Definir las variables y parámetros
+volumen <- 100 # m^3
+ventilacion <- 0.5 # cambios de aire por hora
+personas <- rpois(25, lambda = 3) # número de personas por minuto, simulado con Poisson
+tasa_CO2_persona <- co2_conv # litros/minuto
+concentracion_inicial <- 400 # ppm
+delta_tiempo <- 60 # minuto
+
+
+#Función para calcular la concentración de CO2
+concentracion_CO2 <- function(co2_inicial, volumen, personas, ventilacion, co2_conv, delta_tiempo) {
+  # Calcular la tasa de producción de CO2 total
+  tasa_CO2_total <- co2_conv * personas # litros/minuto
+  
+  # Calcular la tasa de ventilación
+  caudal_ventilacion <- ventilacion * volumen / delta_tiempo # m^3/minuto
+  
+  # Calcular la tasa de acumulación de CO2
+  tasa_acumulacion_CO2 <- tasa_CO2_total - caudal_ventilacion * co2_inicial
+  
+  # Calcular la concentración de CO2 después de delta_tiempo minutos
+  co2_final <- co2_inicial + tasa_acumulacion_CO2 * delta_tiempo  / volumen
+  
+  return(co2_final)
+}
+
+# Inicializar el vector de concentraciones
+concentracion <- rep(0, length(personas))
+concentracion[1] <- concentracion_inicial
+
+# Simular la concentración de CO2
+for (t in 2:length(personas)) {
+  concentracion[t] <- concentracion_CO2(concentracion[t-1], volumen, personas[t], ventilacion, tasa_CO2_persona[t], delta_tiempo)
+}
+
+# Graficar la concentración de CO2 en el tiempo
+plot(concentracion, type = "l", xlab = "Tiempo (minutos)", ylab = "Concentración de CO2 (ppm)", main = "Simulación de concentración de CO2 en un espacio cerrado")
+
+
+```
+
+```{r}
+# Crear un data frame con los datos simulados
+datos <- data.frame(Tiempo = 1:length(concentracion), Concentracion = concentracion)
+
+# Graficar los datos en un gráfico de dispersión
+plot(datos, xlab = "Tiempo (minutos)", ylab = "Concentración de CO2 (ppm)", main = "Simulación de concentración de CO2 en un espacio cerrado", pch = 16, col = "blue")
+```
+El resultado es un gráfico de dispersión que muestra la evolución de la concentración de CO2 en el tiempo en un espacio cerrado. La simulación permite estudiar cómo la concentración de CO2 varía en función de los diferentes parámetros, como la ventilación, el número de personas y el tamaño del espacio cerrado. Este análisis puede ser útil para determinar las condiciones necesarias para mantener una concentración de CO2 adecuada y garantizar una buena calidad del aire en el espacio cerrado.
+
+```{r}
+```
